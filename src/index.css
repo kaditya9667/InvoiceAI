@@ -1,0 +1,95 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    @apply bg-black text-slate-100 font-sans antialiased overflow-x-hidden selection:bg-purple-500/30 selection:text-purple-200;
+  }
+}
+
+/* Comprehensive CSS Rules to hide any Spline logo / watermark badges */
+[href*="spline.design"],
+a[href*="spline"],
+canvas + div,
+canvas ~ div,
+div[style*="spline"],
+div[class*="spline"],
+.spline-watermark,
+#spline-logo {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Custom Utilities Matched to Spline 3D Scene Palette (Electric Indigo, Vivid Violet, Deep Cyan, Magenta Glows) */
+.glass-panel {
+  background: rgba(15, 10, 30, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+}
+
+.glass-card {
+  background: linear-gradient(135deg, rgba(20, 15, 38, 0.85) 0%, rgba(10, 8, 22, 0.95) 100%);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(168, 85, 247, 0.2);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glass-card-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-card-hover:hover {
+  border-color: rgba(217, 70, 239, 0.5);
+  box-shadow: 0 0 30px rgba(168, 85, 247, 0.25), inset 0 0 15px rgba(217, 70, 239, 0.1);
+  transform: translateY(-2px);
+}
+
+.glow-text-purple {
+  text-shadow: 0 0 16px rgba(168, 85, 247, 0.6);
+}
+
+.glow-bg-purple {
+  box-shadow: 0 0 45px rgba(168, 85, 247, 0.3);
+}
+
+.glow-bg-indigo {
+  box-shadow: 0 0 50px rgba(99, 102, 241, 0.35);
+}
+
+/* Background Cyber Mesh with Spline Indigo Tint */
+.cyber-grid {
+  background-size: 40px 40px;
+  background-image: 
+    linear-gradient(to right, rgba(168, 85, 247, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(168, 85, 247, 0.05) 1px, transparent 1px);
+}
+
+.cyber-dots {
+  background-image: radial-gradient(rgba(192, 132, 252, 0.15) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #05030a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #1e1535;
+  border-radius: 4px;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #342258;
+}
