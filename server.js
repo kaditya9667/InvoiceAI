@@ -933,6 +933,10 @@ app.delete('/api/delete-invoice/:id', authenticateToken, (req, res) => {
   return res.status(404).json({ error: "Invoice not found" });
 });
 
-app.listen(PORT, () => {
-  console.log(`Backend server running on http://localhost:${PORT}`);
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Backend server running on http://localhost:${PORT}`);
+  });
+}
+
+export default app;

@@ -21,7 +21,13 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
         body: JSON.stringify({ email, password })
       });
 
-      const data = await response.json();
+      const contentType = response.headers.get('content-type') || '';
+      let data = {};
+      if (contentType.includes('application/json')) {
+        data = await response.json();
+      } else {
+        throw new Error('Authentication service unavailable. Please verify API configuration.');
+      }
 
       if (!response.ok) {
         throw new Error(data.error || 'Login failed');
