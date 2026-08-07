@@ -3,6 +3,7 @@ import cors from 'cors';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import dotenv from 'dotenv';
+import bcrypt from 'bcryptjs';
 import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
@@ -12,27 +13,53 @@ dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = 'invoiceshield-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET || 'invoiceshield_enterprise_secure_token_key_2026';
 
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-const VALID_USERS = [
+// Enterprise User Credentials (Environment Configured with bcrypt hashing)
+const RAW_USERS = [
   {
-    email: 'admin@invoiceshield.ai',
-    password: 'Password123!',
+    email: process.env.ADMIN_EMAIL || 'admin@invoiceshield.ai',
+    password: process.env.ADMIN_PASSWORD || 'ShieldAdmin#2026!',
     name: 'Chief Security Officer',
     role: 'Admin'
   },
   {
-    email: 'cfo@invoiceshield.ai',
-    password: 'Password123!',
+    email: process.env.CFO_EMAIL || 'cfo@invoiceshield.ai',
+    password: process.env.CFO_PASSWORD || 'CfoExecutive#2026!',
     name: 'Finance Executive',
     role: 'CFO'
   }
 ];
+
+const VALID_USERS = RAW_USERS.map(user => ({
+  email: user.email.toLowerCase().trim(),
+  passwordHash: bcrypt.hashSync(user.password, 10),
+  name: user.name,
+  role: user.role
+}));
+
+// JWT Security Verification Middleware
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Access Denied: Enterprise Security Token Required.' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(403).json({ error: 'Forbidden: Invalid or Expired Session Token.' });
+    }
+    req.user = decoded;
+    next();
+  });
+}
 
 // Indian State Codes Lookup
 const GST_STATE_CODES = {
@@ -59,8 +86,8 @@ const REAL_GSTIN_REGISTRY = {
 // Database of Invoices
 let mockInvoices = [];
 
-// Universal GSTIN Verification Route
-app.get('/api/verify-gstin/:gstin', async (req, res) => {
+// Universal GSTIN Verification Route (Protected)
+app.get('/api/verify-gstin/:gstin', authenticateToken, async (req, res) => {
   const inputGst = req.params.gstin.toUpperCase().trim();
   const gstinRegex = /^\d{2}[A-Z]{5}\d{4}[A-Z]{1}[A-Z\d]{1}[Z]{1}[A-Z\d]{1}$/;
 
@@ -114,8 +141,8 @@ app.get('/api/verify-gstin/:gstin', async (req, res) => {
   });
 });
 
-// Dynamically Calculate REAL Dashboard Metrics Endpoint
-app.get('/api/real-metrics', (req, res) => {
+// Dynamically Calculate REAL Dashboard Metrics Endpoint (Protected)
+app.get('/api/real-metrics', authenticateToken, (req, res) => {
   const totalInvoices = mockInvoices.length;
   const safeCount = mockInvoices.filter(i => i.status === 'Safe').length;
   const reviewCount = mockInvoices.filter(i => i.status === 'Review').length;
@@ -164,16 +191,17 @@ app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
-  const user = VALID_USERS.find(
-    (u) => u.email.toLowerCase() === email.toLowerCase().trim() && u.password === password
-  );
+  const reqEmail = String(email).toLowerCase().trim();
+  const user = VALID_USERS.find(u => u.email === reqEmail);
 
-  if (!user) return res.status(401).json({ error: 'Invalid email or password.' });
+  if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
+    return res.status(401).json({ error: 'Invalid enterprise email or password.' });
+  }
 
   const token = jwt.sign(
     { email: user.email, name: user.name, role: user.role },
     JWT_SECRET,
-    { expiresIn: '2h' }
+    { expiresIn: '8h' }
   );
 
   return res.json({
@@ -676,7 +704,7 @@ function extractInvoiceStructured(extractedText, fileName) {
   };
 }
 
-app.post('/api/analyze-invoice-pdf', upload.single('file'), async (req, res) => {
+app.post('/api/analyze-invoice-pdf', authenticateToken, upload.single('file'), async (req, res) => {
   try {
     let extractedText = '';
     let fileName = 'Uploaded_Invoice.pdf';
@@ -757,8 +785,8 @@ app.post('/api/analyze-invoice-pdf', upload.single('file'), async (req, res) => 
   }
 });
 
-// Batch Import API
-app.post('/api/import-batch', (req, res) => {
+// Batch Import API (Protected)
+app.post('/api/import-batch', authenticateToken, (req, res) => {
   try {
     const { invoices } = req.body;
     if (!invoices || !Array.isArray(invoices)) {
@@ -858,8 +886,8 @@ app.post('/api/import-batch', (req, res) => {
   }
 });
 
-// Update Status API
-app.post('/api/update-invoice-status', (req, res) => {
+// Update Status API (Protected)
+app.post('/api/update-invoice-status', authenticateToken, (req, res) => {
   const { id, newStatus } = req.body;
   const invoice = mockInvoices.find(inv => inv.id === id);
   if (invoice) {
@@ -869,16 +897,16 @@ app.post('/api/update-invoice-status', (req, res) => {
   return res.status(404).json({ error: "Invoice not found" });
 });
 
-// Clear Entire Database API
-app.post('/api/clear-all-invoices', (req, res) => {
+// Clear Entire Database API (Protected)
+app.post('/api/clear-all-invoices', authenticateToken, (req, res) => {
   const count = mockInvoices.length;
   mockInvoices = [];
   console.log(`[clear-all] Cleared all ${count} invoices from database.`);
   return res.json({ message: `Database wiped clean. Removed ${count} invoice(s).` });
 });
 
-// Bulk Delete Invoices API
-app.post('/api/delete-invoices-bulk', (req, res) => {
+// Bulk Delete Invoices API (Protected)
+app.post('/api/delete-invoices-bulk', authenticateToken, (req, res) => {
   const { ids } = req.body;
   if (!Array.isArray(ids) || ids.length === 0) {
     return res.status(400).json({ error: "IDs array is required for bulk delete." });
@@ -893,8 +921,8 @@ app.post('/api/delete-invoices-bulk', (req, res) => {
   return res.json({ message: `Successfully deleted ${deletedCount} invoice(s).`, deletedCount });
 });
 
-// Delete Invoice API
-app.delete('/api/delete-invoice/:id', (req, res) => {
+// Delete Invoice API (Protected)
+app.delete('/api/delete-invoice/:id', authenticateToken, (req, res) => {
   const targetId = String(req.params.id).trim();
   const initialCount = mockInvoices.length;
   mockInvoices = mockInvoices.filter(inv => String(inv.id).trim() !== targetId && String(inv._uuid).trim() !== targetId);

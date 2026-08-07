@@ -64,8 +64,10 @@ export default function UploadModal({ isOpen, onClose, onScanComplete }) {
         const formData = new FormData();
         formData.append('file', curFile);
 
+        const token = localStorage.getItem('invoiceshield_token');
         const response = await fetch('/api/analyze-invoice-pdf', {
           method: 'POST',
+          headers: token ? { 'Authorization': `Bearer ${token}` } : {},
           body: formData
         });
 
@@ -96,9 +98,13 @@ export default function UploadModal({ isOpen, onClose, onScanComplete }) {
 
     try {
       const parsedJson = JSON.parse(jsonText);
+      const token = localStorage.getItem('invoiceshield_token');
       const response = await fetch('/api/import-batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ invoices: parsedJson })
       });
 

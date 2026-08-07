@@ -59,12 +59,22 @@ export default function DashboardPreview({ onSelectInvoice }) {
   // Active Forensic Incident Dossier Modal State
   const [activeDossierInvoice, setActiveDossierInvoice] = useState(null);
 
+  const getAuthHeaders = (extraHeaders = {}) => {
+    const token = localStorage.getItem('invoiceshield_token');
+    return {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...extraHeaders
+    };
+  };
+
   // Fetch REAL Metrics from Backend
   const fetchRealData = async () => {
     try {
-      const response = await fetch('/api/real-metrics');
+      const response = await fetch('/api/real-metrics', {
+        headers: getAuthHeaders()
+      });
       const data = await response.json();
-      setInvoices(data.invoices);
+      setInvoices(data.invoices || []);
       setMetrics(data.stats);
       setRiskDistribution(data.riskDistribution);
       if (data.trendData) setTrendData(data.trendData);
@@ -84,7 +94,9 @@ export default function DashboardPreview({ onSelectInvoice }) {
     setGstinInput(targetGst);
     setIsGstLoading(true);
     try {
-      const res = await fetch(`/api/verify-gstin/${targetGst}`);
+      const res = await fetch(`/api/verify-gstin/${targetGst}`, {
+        headers: getAuthHeaders()
+      });
       const data = await res.json();
       setIsGstLoading(false);
       setGstLookupResult(data);
@@ -136,7 +148,7 @@ export default function DashboardPreview({ onSelectInvoice }) {
     try {
       await fetch('/api/update-invoice-status', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ id, newStatus })
       });
       fetchRealData();
@@ -152,7 +164,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
 
     try {
       await fetch(`/api/delete-invoice/${encodeURIComponent(targetId)}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: getAuthHeaders()
       });
       fetchRealData();
     } catch (e) {
@@ -172,7 +185,7 @@ export default function DashboardPreview({ onSelectInvoice }) {
     try {
       await fetch('/api/delete-invoices-bulk', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ ids: Array.from(idsToRemove) })
       });
       fetchRealData();
@@ -188,7 +201,10 @@ export default function DashboardPreview({ onSelectInvoice }) {
     setSelectedInvoiceIds([]);
 
     try {
-      await fetch('/api/clear-all-invoices', { method: 'POST' });
+      await fetch('/api/clear-all-invoices', {
+        method: 'POST',
+        headers: getAuthHeaders()
+      });
       fetchRealData();
     } catch (e) {
       console.error("Clear database error:", e);
