@@ -1,22 +1,12 @@
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import {
-  getFirestore,
-  collection,
-  doc,
-  setDoc,
-  getDocs,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  query,
-  where
-} from "firebase/firestore";
+import { getDatabase, ref, set, get, child, update, remove } from "firebase/database";
 
-// Your web app's Firebase configuration
+// Firebase Realtime Database configuration
 const firebaseConfig = {
   apiKey: "AIzaSyBTbJQBgeanZNZfXIKTC-z6-UGOHdqyLhs",
   authDomain: "invoiceai-64213.firebaseapp.com",
+  databaseURL: "https://invoiceai-64213-default-rtdb.asia-southeast1.firebasedatabase.app",
   projectId: "invoiceai-64213",
   storageBucket: "invoiceai-64213.firebasestorage.app",
   messagingSenderId: "462876857803",
@@ -27,16 +17,16 @@ const firebaseConfig = {
 // Initialize Firebase App
 const app = initializeApp(firebaseConfig);
 
-// Initialize Firestore Cloud Database
-export const db = getFirestore(app);
+// Initialize Firebase Realtime Database
+export const rtdb = getDatabase(app);
 
-// Initialize Analytics safely
+// Analytics initialization
 let analytics = null;
 if (typeof window !== "undefined") {
   try {
     analytics = getAnalytics(app);
   } catch (e) {
-    // Analytics fallback if measurementId is blocked/offline
+    // Analytics fallback
   }
 }
 

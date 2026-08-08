@@ -187,83 +187,88 @@ app.get('/api/verify-gstin/:gstin', authenticateToken, async (req, res) => {
   });
 });
 
-// Firestore Cloud Sync Helpers (Non-blocking with 1.5s max timeout fallback)
-function saveInvoiceToFirestore(invoice) {
-  if (!db) return;
-  const docId = String(invoice._uuid || invoice.id).trim();
-  const invoiceDoc = doc(db, 'invoices', docId);
-  const saveTask = setDoc(invoiceDoc, JSON.parse(JSON.stringify(invoice)), { merge: true });
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Cloud Timeout")), 1500));
+const FIREBASE_RTDB_URL = "https://invoiceai-64213-default-rtdb.asia-southeast1.firebasedatabase.app";
 
-  Promise.race([saveTask, timeout])
-    .then(() => console.log(`[Firebase Firestore] Persisted invoice ${docId} to cloud.`))
-    .catch(err => console.warn(`[Firebase Firestore] Cloud save notice for ${invoice?.id}:`, err.message));
+// Firebase Realtime Database Sync Helpers
+async function saveInvoiceToFirebase(invoice) {
+  try {
+    const docId = String(invoice._uuid || invoice.id).replace(/[\/\.\#\$\[\]]/g, '_').trim();
+    const res = await fetch(`${FIREBASE_RTDB_URL}/invoices/${docId}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(invoice)
+    });
+    if (res.ok) {
+      console.log(`[Firebase RTDB] Successfully saved invoice ${docId} to Realtime Database.`);
+    }
+  } catch (err) {
+    console.warn(`[Firebase RTDB] Cloud save notice for ${invoice?.id}:`, err.message);
+  }
 }
 
-async function fetchUserInvoicesFromFirestore(userEmail) {
+async function fetchUserInvoicesFromFirebase(userEmail) {
   const memoryItems = mockInvoices.filter(inv => {
     if (!userEmail) return true;
     const cleanEmail = String(userEmail).toLowerCase().trim();
     return !inv.ownerEmail || inv.ownerEmail === cleanEmail;
   });
 
-  if (!db) return memoryItems;
-
   try {
-    const invoicesCol = collection(db, 'invoices');
-    let q;
-    if (userEmail) {
+    const res = await fetch(`${FIREBASE_RTDB_URL}/invoices.json`);
+    if (!res.ok) return memoryItems;
+    const data = await res.json();
+    if (!data) return memoryItems;
+
+    const rtdbList = Object.values(data).filter(Boolean);
+    const filteredRtdb = rtdbList.filter(inv => {
+      if (!userEmail) return true;
       const cleanEmail = String(userEmail).toLowerCase().trim();
-      q = query(invoicesCol, where('ownerEmail', '==', cleanEmail));
-    } else {
-      q = query(invoicesCol);
-    }
-    const readTask = getDocs(q);
-    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Read Timeout")), 1500));
+      return !inv.ownerEmail || inv.ownerEmail === cleanEmail;
+    });
 
-    const snapshot = await Promise.race([readTask, timeout]);
-    const firestoreDocs = snapshot.docs.map(d => d.data());
-
-    // Merge memory items into Firestore results avoiding duplicates
-    const firestoreIds = new Set(firestoreDocs.map(d => String(d.id || d._uuid)));
-    const merged = [...firestoreDocs];
+    const rtdbIds = new Set(filteredRtdb.map(d => String(d.id || d._uuid)));
+    const merged = [...filteredRtdb];
     for (const memItem of memoryItems) {
-      if (!firestoreIds.has(String(memItem.id || memItem._uuid))) {
+      if (!rtdbIds.has(String(memItem.id || memItem._uuid))) {
         merged.push(memItem);
       }
     }
     return merged;
   } catch (err) {
-    console.warn('[Firebase Firestore] Cloud query notice, using local pool:', err.message);
+    console.warn('[Firebase RTDB] Read notice, using local pool:', err.message);
     return memoryItems;
   }
 }
 
-function updateInvoiceInFirestore(docId, updates) {
-  if (!db) return;
-  const targetDoc = doc(db, 'invoices', String(docId).trim());
-  const updateTask = updateDoc(targetDoc, updates);
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Update Timeout")), 1500));
-
-  Promise.race([updateTask, timeout])
-    .then(() => console.log(`[Firebase Firestore] Updated document ${docId} in cloud.`))
-    .catch(err => console.warn(`[Firebase Firestore] Update notice for ${docId}:`, err.message));
+async function updateInvoiceInFirebase(docId, updates) {
+  try {
+    const cleanKey = String(docId).replace(/[\/\.\#\$\[\]]/g, '_').trim();
+    await fetch(`${FIREBASE_RTDB_URL}/invoices/${cleanKey}.json`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    console.log(`[Firebase RTDB] Updated record ${cleanKey} in Realtime Database.`);
+  } catch (err) {
+    console.warn(`[Firebase RTDB] Update notice for ${docId}:`, err.message);
+  }
 }
 
-function deleteInvoiceFromFirestore(docId) {
-  if (!db) return;
-  const targetDoc = doc(db, 'invoices', String(docId).trim());
-  const deleteTask = deleteDoc(targetDoc);
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Delete Timeout")), 1500));
-
-  Promise.race([deleteTask, timeout])
-    .then(() => console.log(`[Firebase Firestore] Deleted document ${docId} from cloud.`))
-    .catch(err => console.warn(`[Firebase Firestore] Delete notice for ${docId}:`, err.message));
+async function deleteInvoiceFromFirebase(docId) {
+  try {
+    const cleanKey = String(docId).replace(/[\/\.\#\$\[\]]/g, '_').trim();
+    await fetch(`${FIREBASE_RTDB_URL}/invoices/${cleanKey}.json`, {
+      method: 'DELETE'
+    });
+    console.log(`[Firebase RTDB] Deleted record ${cleanKey} from Realtime Database.`);
+  } catch (err) {
+    console.warn(`[Firebase RTDB] Delete notice for ${docId}:`, err.message);
+  }
 }
 
 // Dynamically Calculate REAL Dashboard Metrics Endpoint (Protected)
 app.get('/api/real-metrics', authenticateToken, async (req, res) => {
-  const userInvoices = await fetchUserInvoicesFromFirestore(req.user?.email);
+  const userInvoices = await fetchUserInvoicesFromFirebase(req.user?.email);
   const totalInvoices = userInvoices.length;
   const safeCount = userInvoices.filter(i => i.status === 'Safe').length;
   const reviewCount = userInvoices.filter(i => i.status === 'Review').length;
@@ -942,7 +947,7 @@ app.post('/api/analyze-invoice-pdf', authenticateToken, upload.single('file'), a
     parsedInvoice.ownerEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
 
     mockInvoices.unshift(parsedInvoice);
-    saveInvoiceToFirestore(parsedInvoice);
+    saveInvoiceToFirebase(parsedInvoice);
 
     return res.json({
       message: `Invoice scanned and processed successfully`,
@@ -1050,7 +1055,7 @@ app.post('/api/import-batch', authenticateToken, async (req, res) => {
       };
 
       mockInvoices.unshift(parsedInvoice);
-      await saveInvoiceToFirestore(parsedInvoice);
+      await saveInvoiceToFirebase(parsedInvoice);
     }
 
     return res.json({ message: `Successfully imported ${importedCount} invoices.`, count: importedCount });
@@ -1063,11 +1068,11 @@ app.post('/api/import-batch', authenticateToken, async (req, res) => {
 // Update Status API (Protected)
 app.post('/api/update-invoice-status', authenticateToken, async (req, res) => {
   const { id, newStatus } = req.body;
-  const userInvoices = await fetchUserInvoicesFromFirestore(req.user?.email);
+  const userInvoices = await fetchUserInvoicesFromFirebase(req.user?.email);
   const invoice = userInvoices.find(inv => inv.id === id || inv._uuid === id);
   if (invoice) {
     invoice.status = newStatus;
-    await updateInvoiceInFirestore(invoice._uuid || invoice.id, { status: newStatus });
+    await updateInvoiceInFirebase(invoice._uuid || invoice.id, { status: newStatus });
     return res.json({ message: `Invoice ${id} status updated to ${newStatus}`, invoice });
   }
   return res.status(404).json({ error: "Invoice not found" });
@@ -1076,7 +1081,7 @@ app.post('/api/update-invoice-status', authenticateToken, async (req, res) => {
 // Update Investigation Audit Status & Notes API (Protected)
 app.post('/api/update-investigation-status', authenticateToken, async (req, res) => {
   const { id, investigationStatus, investigatorNotes, reviewer } = req.body;
-  const userInvoices = await fetchUserInvoicesFromFirestore(req.user?.email);
+  const userInvoices = await fetchUserInvoicesFromFirebase(req.user?.email);
   const invoice = userInvoices.find(inv => inv.id === id || inv._uuid === id);
   if (invoice) {
     if (investigationStatus) invoice.investigationStatus = investigationStatus;
@@ -1084,7 +1089,7 @@ app.post('/api/update-investigation-status', authenticateToken, async (req, res)
     invoice.investigatedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
     invoice.investigatedBy = reviewer || req.user?.name || req.user?.email || "Reviewer";
 
-    await updateInvoiceInFirestore(invoice._uuid || invoice.id, {
+    await updateInvoiceInFirebase(invoice._uuid || invoice.id, {
       investigationStatus: invoice.investigationStatus,
       investigatorNotes: invoice.investigatorNotes,
       investigatedAt: invoice.investigatedAt,
@@ -1103,9 +1108,9 @@ app.post('/api/update-investigation-status', authenticateToken, async (req, res)
 // Clear Entire Database API (Protected)
 app.post('/api/clear-all-invoices', authenticateToken, async (req, res) => {
   const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
-  const userItems = await fetchUserInvoicesFromFirestore(userEmail);
+  const userItems = await fetchUserInvoicesFromFirebase(userEmail);
   for (const item of userItems) {
-    await deleteInvoiceFromFirestore(item._uuid || item.id);
+    await deleteInvoiceFromFirebase(item._uuid || item.id);
   }
   const initialCount = mockInvoices.length;
   mockInvoices = mockInvoices.filter(inv => inv.ownerEmail && inv.ownerEmail !== userEmail);
@@ -1125,7 +1130,7 @@ app.post('/api/delete-invoices-bulk', authenticateToken, async (req, res) => {
   const initialCount = mockInvoices.length;
   const idsSet = new Set(ids.map(id => String(id).trim()));
   for (const targetId of idsSet) {
-    await deleteInvoiceFromFirestore(targetId);
+    await deleteInvoiceFromFirebase(targetId);
   }
   mockInvoices = mockInvoices.filter(inv => {
     const isTarget = idsSet.has(String(inv.id).trim()) || idsSet.has(String(inv._uuid).trim());
@@ -1144,7 +1149,7 @@ app.post('/api/delete-invoices-bulk', authenticateToken, async (req, res) => {
 app.delete('/api/delete-invoice/:id', authenticateToken, async (req, res) => {
   const targetId = String(req.params.id).trim();
   const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
-  await deleteInvoiceFromFirestore(targetId);
+  await deleteInvoiceFromFirebase(targetId);
   const initialCount = mockInvoices.length;
   mockInvoices = mockInvoices.filter(inv => {
     const isMatch = String(inv.id).trim() === targetId || String(inv._uuid).trim() === targetId;
