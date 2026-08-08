@@ -310,20 +310,20 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
               </div>
 
               {/* Investigator Audit & Case Review Section */}
-              <div className="p-5 rounded-2xl bg-[#0e081c] border border-purple-500/40 space-y-4 shadow-xl font-mono">
-                <div className="flex items-center justify-between border-b border-purple-900/40 pb-3">
-                  <div className="flex items-center space-x-2">
+              <div className="p-6 rounded-2xl bg-[#0e081c] border border-purple-500/40 space-y-5 shadow-xl font-mono">
+                <div className="flex items-center justify-between border-b border-purple-900/40 pb-3.5">
+                  <div className="flex items-center space-x-2.5">
                     <ClipboardCheck className="w-5 h-5 text-purple-400" />
-                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                    <h4 className="text-base sm:text-lg font-bold text-white uppercase tracking-wider">
                       Investigator Case Review
                     </h4>
                   </div>
-                  <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${
+                  <span className={`px-3 py-1 rounded-full border text-xs sm:text-sm font-bold ${
                     investigationStatus === 'Verified'
-                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      ? 'bg-emerald-950/70 border-emerald-800/60 text-emerald-300'
                       : investigationStatus === 'Suspected'
-                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
-                      : 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                      ? 'bg-red-950/80 border-red-800/60 text-red-300'
+                      : 'bg-amber-950/70 border-amber-800/60 text-amber-300'
                   }`}>
                     {investigationStatus}
                   </span>
@@ -331,10 +331,10 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
 
                 {/* Status Selection Buttons */}
                 <div>
-                  <label className="block text-[11px] text-slate-400 uppercase tracking-wider mb-2 font-bold">
+                  <label className="block text-xs text-slate-300 uppercase tracking-wider mb-2.5 font-bold">
                     Set Investigation Label:
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2.5">
                     {[
                       { id: 'Needs Review', label: 'Needs Review' },
                       { id: 'Verified', label: 'Verified Authentic' },
@@ -344,17 +344,17 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
                         key={opt.id}
                         type="button"
                         onClick={() => setInvestigationStatus(opt.id)}
-                        className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                        className={`py-2.5 px-3 rounded-xl border text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5 ${
                           investigationStatus === opt.id
                             ? opt.id === 'Verified'
-                              ? 'bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-950/50'
+                              ? 'bg-emerald-950/80 border-emerald-700 text-emerald-300 shadow-md'
                               : opt.id === 'Suspected'
-                              ? 'bg-rose-500/25 border-rose-500 text-rose-300 shadow-md shadow-rose-950/50'
-                              : 'bg-amber-500/25 border-amber-500 text-amber-300 shadow-md shadow-amber-950/50'
+                              ? 'bg-red-950/90 border-red-800 text-red-300 shadow-md'
+                              : 'bg-amber-950/80 border-amber-700 text-amber-300 shadow-md'
                             : 'bg-[#05030a] border-purple-900/40 text-slate-400 hover:text-white'
                         }`}
                       >
-                        {investigationStatus === opt.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        {investigationStatus === opt.id && <Check className="w-4 h-4 shrink-0" />}
                         <span>{opt.label}</span>
                       </button>
                     ))}
@@ -363,7 +363,7 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
 
                 {/* Investigator Note Textarea */}
                 <div>
-                  <label className="block text-[11px] text-slate-400 uppercase tracking-wider mb-1.5 font-bold">
+                  <label className="block text-xs text-slate-300 uppercase tracking-wider mb-2 font-bold">
                     Investigator Audit Note:
                   </label>
                   <textarea
@@ -371,23 +371,23 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
                     value={investigatorNotes}
                     onChange={(e) => setInvestigatorNotes(e.target.value)}
                     placeholder="Enter audit observations, GST matching notes, or evidence summary..."
-                    className="w-full p-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-200 text-xs focus:outline-none focus:border-purple-400 transition-colors"
+                    className="w-full p-3.5 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-200 text-xs sm:text-sm focus:outline-none focus:border-purple-400 transition-colors"
                   />
                 </div>
 
                 {/* Save Button & Audit Timestamp */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-400">
+                  <span className="text-xs text-slate-400">
                     {invoice.investigatedBy ? `Audited by ${invoice.investigatedBy}` : 'Unreviewed case'}
                   </span>
                   <button
                     type="button"
                     onClick={handleSaveInvestigation}
                     disabled={isSavingReview}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg flex items-center space-x-1.5 ${
+                    className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-lg flex items-center space-x-2 ${
                       saveSuccess
-                        ? 'bg-emerald-600 text-white'
-                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white'
+                        ? 'bg-emerald-700 text-white'
+                        : 'bg-gradient-to-r from-purple-700 to-indigo-800 hover:brightness-110 text-white'
                     }`}
                   >
                     {saveSuccess ? <Check className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
