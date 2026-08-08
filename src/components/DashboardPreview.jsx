@@ -46,6 +46,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
   const [filterRiskLevel, setFilterRiskLevel] = useState('All'); // 'All', 'Low', 'Medium', 'High'
   const [filterStatus, setFilterStatus] = useState('All'); // 'All', 'Safe', 'Review', 'Blocked'
   const [filterInvestigationStatus, setFilterInvestigationStatus] = useState('All'); // 'All', 'Needs Review', 'Verified', 'Suspected'
+  const [filterMediaType, setFilterMediaType] = useState('All'); // 'All', 'PDF', 'Image', 'Batch'
+  const [viewQueueMode, setViewQueueMode] = useState('all'); // 'all', 'high_priority'
   const [sortBy, setSortBy] = useState('date-desc');
   const [isFilterOpen, setIsFilterOpen] = useState(true);
 
@@ -355,8 +357,31 @@ export default function DashboardPreview({ onSelectInvoice }) {
       return false;
     }
 
+    // 8. Media Type / Format Filter
+    if (filterMediaType !== 'All') {
+      const typeStr = (item.metadata?.invoiceType || '').toLowerCase();
+      const idStr = String(item.id || '').toLowerCase();
+      if (filterMediaType === 'PDF' && !typeStr.includes('pdf') && !idStr.includes('del') && !idStr.includes('ldx')) return false;
+      if (filterMediaType === 'Image' && !typeStr.includes('image') && !typeStr.includes('ocr')) return false;
+      if (filterMediaType === 'Batch' && !idStr.includes('inv-')) return false;
+    }
+
+    // 9. High-Priority Risk Review Queue Mode Filter
+    if (viewQueueMode === 'high_priority') {
+      const isHighRiskScore = (item.riskScore || 0) >= 40;
+      const isNonSafe = item.status !== 'Safe';
+      const isPendingReview = invStatus === 'Needs Review' || invStatus === 'Suspected';
+      if (!isHighRiskScore && !isNonSafe && !isPendingReview) {
+        return false;
+      }
+    }
+
     return true;
   }).sort((a, b) => {
+    // When High-Priority Review Queue is active, default sort is Risk Score (Highest First)
+    if (viewQueueMode === 'high_priority' && sortBy === 'date-desc') {
+      return (b.riskScore || 0) - (a.riskScore || 0);
+    }
     if (sortBy === 'date-desc') return new Date(b.date || 0) - new Date(a.date || 0);
     if (sortBy === 'date-asc') return new Date(a.date || 0) - new Date(b.date || 0);
     if (sortBy === 'amount-desc') return (b.amount || 0) - (a.amount || 0);
@@ -366,7 +391,13 @@ export default function DashboardPreview({ onSelectInvoice }) {
     return 0;
   });
 
+  const highPriorityQueueCount = invoices.filter(item => {
+    const invStatus = item.investigationStatus || 'Needs Review';
+    return (item.riskScore || 0) >= 40 || item.status !== 'Safe' || invStatus === 'Needs Review' || invStatus === 'Suspected';
+  }).length;
+
   const hasActiveFilters =
+    viewQueueMode !== 'all' ||
     searchTerm !== '' ||
     filterDatePreset !== 'All' ||
     fromDate !== '' ||
@@ -378,9 +409,11 @@ export default function DashboardPreview({ onSelectInvoice }) {
     filterState !== 'All' ||
     filterRiskLevel !== 'All' ||
     filterStatus !== 'All' ||
-    filterInvestigationStatus !== 'All';
+    filterInvestigationStatus !== 'All' ||
+    filterMediaType !== 'All';
 
   const resetAllFilters = () => {
+    setViewQueueMode('all');
     setSearchTerm('');
     setFilterDatePreset('All');
     setFromDate('');
@@ -392,6 +425,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
     setFilterState('All');
     setFilterRiskLevel('All');
     setFilterStatus('All');
+    setFilterInvestigationStatus('All');
+    setFilterMediaType('All');
     setSortBy('date-desc');
   };
 
@@ -620,16 +655,69 @@ export default function DashboardPreview({ onSelectInvoice }) {
         {/* Live Invoice Records Table & Multi-Filter Intelligence Panel */}
         <div className="p-6 rounded-2xl bg-[#120b22]/80 border border-purple-900/40 space-y-6">
 
+          {/* Risk-Filtered Review Queue Mode Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#090611] border border-purple-900/50">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  setViewQueueMode('all');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+                  viewQueueMode === 'all'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-950'
+                    : 'bg-[#120b22] text-slate-400 hover:text-white border border-purple-900/40'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>All Security Records ({invoices.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setViewQueueMode('high_priority');
+                  setSortBy('risk-desc');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-2 ${
+                  viewQueueMode === 'high_priority'
+                    ? 'bg-gradient-to-r from-red-600 via-rose-600 to-amber-600 text-white shadow-lg shadow-red-950 border border-red-400/30'
+                    : 'bg-[#120b22] text-rose-300 hover:text-white border border-rose-900/40'
+                }`}
+              >
+                <AlertOctagon className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                <span>High-Priority Review Queue</span>
+                <span className="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-200 border border-rose-500/40 text-[10px] font-mono">
+                  {highPriorityQueueCount}
+                </span>
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-400 font-mono hidden md:flex items-center space-x-2">
+              {viewQueueMode === 'high_priority' ? (
+                <span className="text-rose-400 font-bold flex items-center gap-1">
+                  🔥 Sorted by Highest Risk Score First (Review Queue Mode)
+                </span>
+              ) : (
+                <span>Showing {filteredInvoices.length} of {invoices.length} total records</span>
+              )}
+            </div>
+          </div>
+
           {/* Header Row: Title & Search Bar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-purple-900/40">
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="dashboard-title">Live Invoice Records</h3>
+                <h3 className="dashboard-title">
+                  {viewQueueMode === 'high_priority' ? 'High-Priority Security Review Queue' : 'Live Invoice Records'}
+                </h3>
                 <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-xs font-bold">
-                  {filteredInvoices.length} of {invoices.length} items
+                  {filteredInvoices.length} items
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">Multi-criteria audit query across Date, Vendor, Amount, State, Risk Level & GST Status</p>
+              <p className="text-xs text-slate-400 mt-1">
+                {viewQueueMode === 'high_priority'
+                  ? 'Urgent security cases requiring immediate audit verification (Risk Score ≥ 40 / Non-Safe / Suspected)'
+                  : 'Multi-criteria audit query across Date, Vendor, Amount, State, Risk Level, GST & Media Type'}
+              </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
@@ -852,6 +940,24 @@ export default function DashboardPreview({ onSelectInvoice }) {
                     </select>
                   </div>
 
+                  {/* 8. Media Type / Format Filter */}
+                  <div className="space-y-1.5">
+                    <label className="text-[11px] font-mono text-purple-300 font-bold uppercase tracking-wider flex items-center space-x-1">
+                      <FileText className="w-3 h-3 text-purple-400" />
+                      <span>Media Type / OCR Source</span>
+                    </label>
+                    <select
+                      value={filterMediaType}
+                      onChange={(e) => setFilterMediaType(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-[#090611] border border-purple-900/50 text-slate-200 text-xs focus:outline-none focus:border-purple-400 cursor-pointer"
+                    >
+                      <option value="All" className="bg-[#120b22]">All Media Types</option>
+                      <option value="PDF" className="bg-[#120b22]">Vector PDF Document</option>
+                      <option value="Image" className="bg-[#120b22]">Scanned OCR Image</option>
+                      <option value="Batch" className="bg-[#120b22]">JSON Batch Import</option>
+                    </select>
+                  </div>
+
                   {/* 7. Investigation Status Filter */}
                   <div className="space-y-1.5 sm:col-span-2 lg:col-span-3 xl:col-span-2">
                     <label className="text-[11px] font-mono text-purple-300 font-bold uppercase tracking-wider flex items-center space-x-1">
@@ -896,10 +1002,24 @@ export default function DashboardPreview({ onSelectInvoice }) {
                   <span>Active Filters:</span>
                 </span>
 
+                {viewQueueMode === 'high_priority' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-rose-950 border border-rose-600/60 text-rose-200 flex items-center space-x-1 font-bold">
+                    <span>🔥 High-Priority Queue</span>
+                    <button onClick={() => setViewQueueMode('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+
                 {searchTerm && (
                   <span className="px-2.5 py-1 rounded-lg bg-purple-950 border border-purple-700/50 text-purple-200 flex items-center space-x-1">
                     <span>Search: "{searchTerm}"</span>
                     <button onClick={() => setSearchTerm('')} className="hover:text-red-400"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+
+                {filterMediaType !== 'All' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-950 border border-purple-700/50 text-purple-200 flex items-center space-x-1">
+                    <span>Media: {filterMediaType}</span>
+                    <button onClick={() => setFilterMediaType('All')} className="hover:text-red-400"><X className="w-3 h-3" /></button>
                   </span>
                 )}
 
@@ -935,6 +1055,13 @@ export default function DashboardPreview({ onSelectInvoice }) {
                   <span className="px-2.5 py-1 rounded-lg bg-purple-950 border border-purple-700/50 text-purple-200 flex items-center space-x-1">
                     <span>Risk: {filterRiskLevel}</span>
                     <button onClick={() => setFilterRiskLevel('All')} className="hover:text-red-400"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+
+                {filterInvestigationStatus !== 'All' && (
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-950 border border-purple-700/50 text-purple-200 flex items-center space-x-1">
+                    <span>Audit: {filterInvestigationStatus}</span>
+                    <button onClick={() => setFilterInvestigationStatus('All')} className="hover:text-red-400"><X className="w-3 h-3" /></button>
                   </span>
                 )}
 
@@ -988,6 +1115,7 @@ export default function DashboardPreview({ onSelectInvoice }) {
                   {filteredInvoices.map((inv, idx) => {
                     const rowKey = inv._uuid || `${inv.id}_${idx}`;
                     const isSelected = selectedInvoiceIds.includes(rowKey);
+                    const isHighRiskRow = (inv.riskScore || 0) >= 60 || inv.status === 'Blocked' || inv.investigationStatus === 'Suspected';
                     return (
                       <tr
                         key={rowKey}
@@ -996,7 +1124,11 @@ export default function DashboardPreview({ onSelectInvoice }) {
                           setIsDrawerOpen(true);
                         }}
                         className={`transition-colors group cursor-pointer ${
-                          isSelected ? 'bg-purple-900/30' : 'hover:bg-purple-950/40'
+                          isSelected
+                            ? 'bg-purple-900/40'
+                            : isHighRiskRow
+                            ? 'bg-rose-950/15 hover:bg-rose-900/30 border-l-2 border-l-rose-500'
+                            : 'hover:bg-purple-950/40'
                         }`}
                       >
                         <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
