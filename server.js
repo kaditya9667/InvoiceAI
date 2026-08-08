@@ -44,6 +44,14 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
+// Vercel Serverless Path Normalizer Middleware
+app.use((req, res, next) => {
+  if (req.url && !req.url.startsWith('/api')) {
+    req.url = '/api' + (req.url.startsWith('/') ? req.url : '/' + req.url);
+  }
+  next();
+});
+
 // User Database (Dynamic with default environment seeds & dynamic signups)
 let REGISTERED_USERS = [
   {
@@ -359,7 +367,7 @@ async function findUserByEmail(email) {
 }
 
 // User Registration API
-app.post('/api/signup', async (req, res) => {
+app.post(['/api/signup', '/signup'], async (req, res) => {
   const { name, email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -404,7 +412,7 @@ app.post('/api/signup', async (req, res) => {
 });
 
 // User Login API
-app.post('/api/login', async (req, res) => {
+app.post(['/api/login', '/login'], async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
