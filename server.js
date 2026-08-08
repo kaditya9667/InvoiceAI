@@ -312,8 +312,44 @@ app.get('/api/real-metrics', authenticateToken, async (req, res) => {
   });
 });
 
+// User Persistence Helpers
+async function saveUserToFirebase(user) {
+  try {
+    const userKey = String(user.email).toLowerCase().trim().replace(/[\/\.\#\$\[\]]/g, '_');
+    await fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user)
+    });
+    console.log(`[Firebase RTDB] Saved user account ${user.email}`);
+  } catch (err) {
+    console.warn(`[Firebase RTDB] User save notice:`, err.message);
+  }
+}
+
+async function findUserByEmail(email) {
+  const cleanEmail = String(email).toLowerCase().trim();
+  let user = REGISTERED_USERS.find(u => u.email === cleanEmail);
+  if (user) return user;
+
+  try {
+    const userKey = cleanEmail.replace(/[\/\.\#\$\[\]]/g, '_');
+    const res = await fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`);
+    if (res.ok) {
+      const remoteUser = await res.json();
+      if (remoteUser && remoteUser.email) {
+        REGISTERED_USERS.push(remoteUser);
+        return remoteUser;
+      }
+    }
+  } catch (err) {
+    console.warn('[Firebase RTDB] User lookup notice:', err.message);
+  }
+  return null;
+}
+
 // User Registration API
-app.post('/api/signup', (req, res) => {
+app.post('/api/signup', async (req, res) => {
   const { name, email, password } = req.body;
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' });
@@ -328,7 +364,7 @@ app.post('/api/signup', (req, res) => {
     return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
   }
 
-  const existingUser = REGISTERED_USERS.find(u => u.email === cleanEmail);
+  const existingUser = await findUserByEmail(cleanEmail);
   if (existingUser) {
     return res.status(409).json({ error: 'An account with this email already exists. Please sign in.' });
   }
@@ -340,6 +376,7 @@ app.post('/api/signup', (req, res) => {
     role: 'User'
   };
   REGISTERED_USERS.push(newUser);
+  await saveUserToFirebase(newUser);
 
   console.log(`[Auth] Registered new user account: ${newUser.email}`);
 
@@ -357,12 +394,12 @@ app.post('/api/signup', (req, res) => {
 });
 
 // User Login API
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
   const reqEmail = String(email).toLowerCase().trim();
-  const user = REGISTERED_USERS.find(u => u.email === reqEmail);
+  const user = await findUserByEmail(reqEmail);
 
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
     return res.status(401).json({ error: 'Invalid email or password.' });
