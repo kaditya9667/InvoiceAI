@@ -20,28 +20,21 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
-// Enterprise User Credentials (Environment Configured with bcrypt hashing)
-const RAW_USERS = [
+// User Database (Dynamic with default environment seeds & dynamic signups)
+let REGISTERED_USERS = [
   {
-    email: process.env.ADMIN_EMAIL || 'admin@invoiceshield.ai',
-    password: process.env.ADMIN_PASSWORD || 'ShieldAdmin#2026!',
+    email: (process.env.ADMIN_EMAIL || 'admin@invoiceshield.ai').toLowerCase().trim(),
+    passwordHash: bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'ShieldAdmin#2026!', 10),
     name: 'Chief Security Officer',
     role: 'Admin'
   },
   {
-    email: process.env.CFO_EMAIL || 'cfo@invoiceshield.ai',
-    password: process.env.CFO_PASSWORD || 'CfoExecutive#2026!',
+    email: (process.env.CFO_EMAIL || 'cfo@invoiceshield.ai').toLowerCase().trim(),
+    passwordHash: bcrypt.hashSync(process.env.CFO_PASSWORD || 'CfoExecutive#2026!', 10),
     name: 'Finance Executive',
     role: 'CFO'
   }
 ];
-
-const VALID_USERS = RAW_USERS.map(user => ({
-  email: user.email.toLowerCase().trim(),
-  passwordHash: bcrypt.hashSync(user.password, 10),
-  name: user.name,
-  role: user.role
-}));
 
 // JWT Security Verification Middleware
 function authenticateToken(req, res, next) {
@@ -186,16 +179,60 @@ app.get('/api/real-metrics', authenticateToken, (req, res) => {
   });
 });
 
-// Auth
+// User Registration API
+app.post('/api/signup', (req, res) => {
+  const { name, email, password } = req.body;
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Email and password are required.' });
+  }
+
+  const cleanEmail = String(email).toLowerCase().trim();
+  if (cleanEmail.length < 5 || !cleanEmail.includes('@')) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+  }
+
+  const existingUser = REGISTERED_USERS.find(u => u.email === cleanEmail);
+  if (existingUser) {
+    return res.status(409).json({ error: 'An account with this email already exists. Please sign in.' });
+  }
+
+  const newUser = {
+    email: cleanEmail,
+    passwordHash: bcrypt.hashSync(password, 10),
+    name: (name && String(name).trim()) || cleanEmail.split('@')[0],
+    role: 'User'
+  };
+  REGISTERED_USERS.push(newUser);
+
+  console.log(`[Auth] Registered new user account: ${newUser.email}`);
+
+  const token = jwt.sign(
+    { email: newUser.email, name: newUser.name, role: newUser.role },
+    JWT_SECRET,
+    { expiresIn: '8h' }
+  );
+
+  return res.status(201).json({
+    message: 'Account created successfully',
+    token,
+    user: { email: newUser.email, name: newUser.name, role: newUser.role }
+  });
+});
+
+// User Login API
 app.post('/api/login', (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Email and password required.' });
 
   const reqEmail = String(email).toLowerCase().trim();
-  const user = VALID_USERS.find(u => u.email === reqEmail);
+  const user = REGISTERED_USERS.find(u => u.email === reqEmail);
 
   if (!user || !bcrypt.compareSync(password, user.passwordHash)) {
-    return res.status(401).json({ error: 'Invalid enterprise email or password.' });
+    return res.status(401).json({ error: 'Invalid email or password.' });
   }
 
   const token = jwt.sign(

@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Lock, ArrowRight, Eye, EyeOff, AlertCircle } from 'lucide-react';
+import { Shield, Lock, ArrowRight, Eye, EyeOff, AlertCircle, User, Mail } from 'lucide-react';
 
 export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
+  const [isSignUp, setIsSignUp] = useState(false);
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -14,11 +16,14 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
     setErrorMessage('');
     setIsLoading(true);
 
+    const endpoint = isSignUp ? '/api/signup' : '/api/login';
+    const payload = isSignUp ? { name, email, password } : { email, password };
+
     try {
-      const response = await fetch('/api/login', {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify(payload)
       });
 
       const contentType = response.headers.get('content-type') || '';
@@ -26,11 +31,11 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
       if (contentType.includes('application/json')) {
         data = await response.json();
       } else {
-        throw new Error('Authentication service unavailable. Please verify API configuration.');
+        throw new Error('Authentication service unavailable. Please check your network or try again.');
       }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Login failed');
+        throw new Error(data.error || (isSignUp ? 'Registration failed' : 'Sign in failed'));
       }
 
       localStorage.setItem('invoiceshield_token', data.token);
@@ -39,8 +44,13 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
 
     } catch (err) {
       setIsLoading(false);
-      setErrorMessage(err.message || 'Invalid email or password.');
+      setErrorMessage(err.message || 'An error occurred during authentication.');
     }
+  };
+
+  const toggleMode = () => {
+    setIsSignUp(!isSignUp);
+    setErrorMessage('');
   };
 
   return (
@@ -49,7 +59,7 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
       <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-purple-600/15 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-10 right-10 w-96 h-96 bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none" />
 
-      {/* Login Card */}
+      {/* Auth Card */}
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -73,7 +83,9 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
               InvoiceShield <span className="bg-gradient-to-r from-purple-400 via-fuchsia-400 to-indigo-400 bg-clip-text text-transparent">AI</span>
             </h2>
-            <p className="text-xs text-slate-400 font-mono">Enterprise Secure Authentication Portal</p>
+            <p className="text-xs text-slate-400 font-mono">
+              {isSignUp ? 'Create Your Account' : 'Enterprise Secure Authentication'}
+            </p>
           </div>
         </div>
 
@@ -85,24 +97,50 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
           </div>
         )}
 
-        {/* Login Form */}
-        <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Auth Form */}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {isSignUp && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+            >
+              <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-1.5">
+                Full Name
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required={isSignUp}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-100 text-sm focus:outline-none focus:border-purple-400 transition-colors pl-10"
+                  placeholder="John Doe"
+                />
+                <User className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              </div>
+            </motion.div>
+          )}
+
           <div>
-            <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
-              Corporate Email
+            <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-1.5">
+              Email Address
             </label>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-100 text-sm focus:outline-none focus:border-purple-400 transition-colors"
-              placeholder="name@company.com"
-            />
+            <div className="relative">
+              <input
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-100 text-sm focus:outline-none focus:border-purple-400 transition-colors pl-10"
+                placeholder="name@company.com"
+              />
+              <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+            </div>
           </div>
 
           <div>
-            <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-mono text-slate-300 uppercase tracking-wider mb-1.5">
               Password
             </label>
             <div className="relative">
@@ -111,9 +149,10 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-100 text-sm focus:outline-none focus:border-purple-400 transition-colors pr-10"
-                placeholder="••••••••••••"
+                className="w-full px-4 py-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-100 text-sm focus:outline-none focus:border-purple-400 transition-colors pl-10 pr-10"
+                placeholder={isSignUp ? 'Min 6 characters' : '••••••••••••'}
               />
+              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
@@ -127,22 +166,37 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 font-bold text-white text-sm hover:brightness-110 shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center justify-center space-x-2"
+            className="w-full mt-2 py-3.5 rounded-xl bg-gradient-to-r from-purple-600 via-fuchsia-500 to-indigo-600 font-bold text-white text-sm hover:brightness-110 shadow-lg shadow-purple-500/25 transition-all cursor-pointer flex items-center justify-center space-x-2"
           >
             {isLoading ? (
               <span className="flex items-center space-x-2">
                 <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span>Verifying Security Token...</span>
+                <span>{isSignUp ? 'Creating Account...' : 'Authenticating...'}</span>
               </span>
             ) : (
               <>
                 <Lock className="w-4 h-4" />
-                <span>Authorize & Sign In</span>
+                <span>{isSignUp ? 'Create Account & Sign In' : 'Authorize & Sign In'}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
           </button>
         </form>
+
+        {/* Toggle Mode Link */}
+        <div className="mt-6 pt-4 border-t border-slate-900 text-center">
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="text-xs text-slate-400 hover:text-purple-400 transition-colors cursor-pointer"
+          >
+            {isSignUp ? (
+              <span>Already have an account? <strong className="text-purple-400 underline">Sign In</strong></span>
+            ) : (
+              <span>Don't have an account? <strong className="text-purple-400 underline">Create One</strong></span>
+            )}
+          </button>
+        </div>
       </motion.div>
     </div>
   );
