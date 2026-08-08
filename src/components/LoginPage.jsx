@@ -26,17 +26,16 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
         body: JSON.stringify(payload)
       });
 
-      const contentType = response.headers.get('content-type') || '';
       let data = {};
-      if (contentType.includes('application/json')) {
+      try {
         data = await response.json();
-      } else {
+      } catch (parseErr) {
         const text = await response.text().catch(() => '');
-        console.warn('[Auth Raw Response]:', text);
+        data = { error: text || 'Authentication response failed to parse.' };
       }
 
       if (!response.ok) {
-        throw new Error(data.error || (isSignUp ? 'Registration failed. Please try again.' : 'Invalid email or password.'));
+        throw new Error(data.error || (isSignUp ? 'Registration failed. Please check credentials or sign in.' : 'Invalid email or password.'));
       }
 
       localStorage.setItem('invoiceshield_token', data.token);

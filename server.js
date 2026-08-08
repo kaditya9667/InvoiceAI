@@ -384,7 +384,19 @@ app.post(['/api/signup', '/signup'], async (req, res) => {
 
   const existingUser = await findUserByEmail(cleanEmail);
   if (existingUser) {
-    return res.status(409).json({ error: 'An account with this email already exists. Please sign in.' });
+    if (bcrypt.compareSync(password, existingUser.passwordHash)) {
+      const token = jwt.sign(
+        { email: existingUser.email, name: existingUser.name, role: existingUser.role },
+        JWT_SECRET,
+        { expiresIn: '8h' }
+      );
+      return res.status(200).json({
+        message: 'Account exists. Authenticated successfully.',
+        token,
+        user: { email: existingUser.email, name: existingUser.name, role: existingUser.role }
+      });
+    }
+    return res.status(409).json({ error: 'An account with this email already exists. Please click "Sign In" below.' });
   }
 
   const newUser = {
