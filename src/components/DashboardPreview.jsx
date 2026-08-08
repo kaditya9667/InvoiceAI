@@ -55,20 +55,20 @@ export default function DashboardPreview({ onSelectInvoice }) {
     const status = investigationStatus || 'Needs Review';
     if (status === 'Verified') {
       return {
-        style: 'bg-emerald-950/70 text-emerald-300 border-emerald-800/60',
+        style: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
         label: 'Verified',
         icon: CheckCircle2
       };
     }
     if (status === 'Suspected') {
       return {
-        style: 'bg-red-950/80 text-red-300 border-red-800/60',
+        style: 'bg-rose-500/15 text-rose-400 border-rose-500/40',
         label: 'Suspected',
         icon: AlertOctagon
       };
     }
     return {
-      style: 'bg-amber-950/70 text-amber-300 border-amber-800/60',
+      style: 'bg-amber-500/15 text-amber-400 border-amber-500/40',
       label: 'Needs Review',
       icon: Clock
     };
@@ -655,17 +655,60 @@ export default function DashboardPreview({ onSelectInvoice }) {
         {/* Live Invoice Records Table & Multi-Filter Intelligence Panel */}
         <div className="p-6 rounded-2xl bg-[#120b22]/80 border border-purple-900/40 space-y-6">
 
+          {/* Risk-Filtered Review Queue Mode Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-xl bg-[#090611] border border-purple-900/50">
+            <div className="flex items-center space-x-2">
+              <button
+                onClick={() => {
+                  setViewQueueMode('all');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-2 ${viewQueueMode === 'all'
+                    ? 'bg-purple-600 text-white shadow-lg shadow-purple-950'
+                    : 'bg-[#120b22] text-slate-400 hover:text-white border border-purple-900/40'
+                  }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>All Security Records ({invoices.length})</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setViewQueueMode('high_priority');
+                  setSortBy('risk-desc');
+                }}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer flex items-center space-x-2 ${viewQueueMode === 'high_priority'
+                    ? 'bg-red-950/80 text-red-200 border border-red-800/60 shadow-lg'
+                    : 'bg-[#120b22] text-red-300 hover:text-white border border-red-900/40'
+                  }`}
+              >
+                <AlertOctagon className="w-3.5 h-3.5 text-red-400" />
+                <span>High-Priority Review Queue</span>
+                <span className="px-2 py-0.5 rounded-full bg-red-900/40 text-red-200 border border-red-800/50 text-[10px] font-mono">
+                  {highPriorityQueueCount}
+                </span>
+              </button>
+            </div>
+
+            <div className="text-xs text-slate-400 font-mono hidden md:flex items-center space-x-2">
+              <span>Showing {filteredInvoices.length} of {invoices.length} total records</span>
+            </div>
+          </div>
+
           {/* Header Row: Title & Search Bar */}
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-purple-900/40">
             <div>
               <div className="flex items-center space-x-2">
-                <h3 className="dashboard-title">Live Security Case Records</h3>
+                <h3 className="dashboard-title">
+                  {viewQueueMode === 'high_priority' ? 'High-Priority Security Review Queue' : 'Live Invoice Records'}
+                </h3>
                 <span className="px-2.5 py-0.5 rounded-full bg-purple-500/10 border border-purple-500/30 text-purple-300 font-mono text-xs font-bold">
-                  {filteredInvoices.length} of {invoices.length} items
+                  {filteredInvoices.length} items
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
-                Multi-criteria security audit across Risk Level, Investigation Status, Media Type, Date, Vendor, Amount, State & GST
+                {viewQueueMode === 'high_priority'
+                  ? 'Urgent security cases requiring immediate audit verification (Risk Score ≥ 40 / Non-Safe / Suspected)'
+                  : 'Multi-criteria audit query across Date, Vendor, Amount, State, Risk Level, GST & Media Type'}
               </p>
             </div>
 
@@ -733,8 +776,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
               <button
                 onClick={() => setIsFilterOpen(!isFilterOpen)}
                 className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center space-x-2 transition-all cursor-pointer ${isFilterOpen || hasActiveFilters
-                    ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
-                    : 'bg-[#090611] border-purple-900/40 text-slate-400 hover:text-white'
+                  ? 'bg-purple-600/20 border-purple-500/50 text-purple-300'
+                  : 'bg-[#090611] border-purple-900/40 text-slate-400 hover:text-white'
                   }`}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -924,11 +967,11 @@ export default function DashboardPreview({ onSelectInvoice }) {
                           key={opt.id}
                           onClick={() => setFilterInvestigationStatus(opt.id)}
                           className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${filterInvestigationStatus === opt.id
-                              ? opt.id === 'Verified' ? 'bg-emerald-500 text-slate-950 font-bold'
-                                : opt.id === 'Suspected' ? 'bg-rose-500 text-white font-bold'
-                                  : opt.id === 'Needs Review' ? 'bg-amber-500 text-slate-950 font-bold'
-                                    : 'bg-purple-600 text-white font-bold'
-                              : 'text-slate-400 hover:text-white'
+                            ? opt.id === 'Verified' ? 'bg-emerald-500 text-slate-950 font-bold'
+                              : opt.id === 'Suspected' ? 'bg-rose-500 text-white font-bold'
+                                : opt.id === 'Needs Review' ? 'bg-amber-500 text-slate-950 font-bold'
+                                  : 'bg-purple-600 text-white font-bold'
+                            : 'text-slate-400 hover:text-white'
                             }`}
                         >
                           {opt.label}
@@ -952,8 +995,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
                 </span>
 
                 {viewQueueMode === 'high_priority' && (
-                  <span className="px-2.5 py-1 rounded-lg bg-rose-950 border border-rose-600/60 text-rose-200 flex items-center space-x-1 font-bold">
-                    <span>🔥 High-Priority Queue</span>
+                  <span className="px-2.5 py-1 rounded-lg bg-red-950 border border-red-800/60 text-red-200 flex items-center space-x-1 font-bold">
+                    <span>High-Priority Queue</span>
                     <button onClick={() => setViewQueueMode('all')} className="hover:text-white"><X className="w-3 h-3" /></button>
                   </span>
                 )}
@@ -1035,8 +1078,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
           {/* Table Area */}
           {filteredInvoices.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="w-full text-left text-base sm:text-lg text-slate-200">
-                <thead className="bg-[#090611] text-slate-300 font-mono text-sm sm:text-base uppercase border-b border-purple-900/40">
+              <table className="w-full text-left text-base text-slate-200">
+                <thead className="bg-[#090611] text-slate-300 font-mono text-sm uppercase border-b border-purple-900/40">
                   <tr>
                     <th className="py-4 px-4 w-10 text-center">
                       <input
@@ -1060,7 +1103,7 @@ export default function DashboardPreview({ onSelectInvoice }) {
                     <th className="py-4 px-4 text-right font-extrabold text-white">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-purple-900/30 font-mono text-base sm:text-lg">
+                <tbody className="divide-y divide-purple-900/30 font-mono text-sm sm:text-base">
                   {filteredInvoices.map((inv, idx) => {
                     const rowKey = inv._uuid || `${inv.id}_${idx}`;
                     const isSelected = selectedInvoiceIds.includes(rowKey);
@@ -1072,13 +1115,12 @@ export default function DashboardPreview({ onSelectInvoice }) {
                           setSelectedInspectInvoice(inv);
                           setIsDrawerOpen(true);
                         }}
-                        className={`transition-colors group cursor-pointer ${
-                          isSelected
+                        className={`transition-colors group cursor-pointer ${isSelected
                             ? 'bg-purple-900/40'
                             : isHighRiskRow
-                            ? 'bg-red-950/20 hover:bg-red-900/30 border-l-2 border-l-red-900/80'
-                            : 'hover:bg-purple-950/40'
-                        }`}
+                              ? 'bg-rose-950/15 hover:bg-rose-900/30 border-l-2 border-l-rose-500'
+                              : 'hover:bg-purple-950/40'
+                          }`}
                       >
                         <td className="py-4 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <input
@@ -1088,76 +1130,76 @@ export default function DashboardPreview({ onSelectInvoice }) {
                             className="w-4 h-4 rounded accent-purple-500 cursor-pointer"
                           />
                         </td>
-                        <td className="py-4 px-4 font-bold text-purple-300 text-base sm:text-lg">{inv.id}</td>
-                      <td className="py-4 px-4 text-slate-300 text-sm sm:text-base">{inv.date || '2026-08-04'}</td>
-                      <td className="py-4 px-4 text-white font-sans font-bold text-base sm:text-lg">{inv.vendor}</td>
-                      <td className="py-4 px-4 font-sans">
-                        <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-lg bg-purple-900/30 text-purple-200 border border-purple-800/40 text-xs sm:text-sm font-semibold">
-                          <MapPin className="w-3.5 h-3.5 text-purple-400" />
-                          <span>{inv.state || 'Maharashtra'}</span>
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-right text-white font-bold text-base sm:text-lg">{inv.amountFormatted}</td>
-                      <td className="py-4 px-4 text-center">
-                        <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-extrabold font-mono tracking-wide ${getRiskScoreBadge(inv.riskScore)}`}>
-                          {inv.riskScore} / 100
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center font-sans">
-                        <span className={`inline-block px-3.5 py-1 rounded-full border text-xs sm:text-sm font-bold ${getStatusBadge(inv.status)}`}>
-                          {inv.status}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4 text-center font-sans">
-                        <div className="flex flex-col items-center space-y-1">
-                          {(() => {
-                            const invBadge = getInvestigationBadge(inv.investigationStatus);
-                            const InvIcon = invBadge.icon;
-                            return (
-                              <span className={`inline-flex items-center space-x-1.5 px-3.5 py-1 rounded-full border text-xs sm:text-sm font-bold ${invBadge.style}`}>
-                                <InvIcon className="w-3.5 h-3.5 shrink-0" />
-                                <span>{invBadge.label}</span>
+                        <td className="py-4 px-4 font-bold text-purple-300 text-base">{inv.id}</td>
+                        <td className="py-4 px-4 text-slate-300 text-sm">{inv.date || '2026-08-04'}</td>
+                        <td className="py-4 px-4 text-white font-sans font-bold text-base">{inv.vendor}</td>
+                        <td className="py-4 px-4 font-sans">
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 rounded-lg bg-purple-900/30 text-purple-200 border border-purple-800/40 text-xs sm:text-sm font-semibold">
+                            <MapPin className="w-3.5 h-3.5 text-purple-400" />
+                            <span>{inv.state || 'Maharashtra'}</span>
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-right text-white font-bold text-base">{inv.amountFormatted}</td>
+                        <td className="py-4 px-4 text-center">
+                          <span className={`inline-flex items-center justify-center px-3 py-1.5 rounded-xl border text-xs sm:text-sm font-extrabold font-mono tracking-wide ${getRiskScoreBadge(inv.riskScore)}`}>
+                            {inv.riskScore} / 100
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-center font-sans">
+                          <span className={`inline-block px-3.5 py-1 rounded-full border text-xs sm:text-sm font-bold ${getStatusBadge(inv.status)}`}>
+                            {inv.status}
+                          </span>
+                        </td>
+                        <td className="py-4 px-4 text-center font-sans">
+                          <div className="flex flex-col items-center space-y-1">
+                            {(() => {
+                              const invBadge = getInvestigationBadge(inv.investigationStatus);
+                              const InvIcon = invBadge.icon;
+                              return (
+                                <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-bold ${invBadge.style}`}>
+                                  <InvIcon className="w-3.5 h-3.5 shrink-0" />
+                                  <span>{invBadge.label}</span>
+                                </span>
+                              );
+                            })()}
+                            {inv.investigatorNotes && (
+                              <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px] flex items-center space-x-1" title={inv.investigatorNotes}>
+                                <MessageSquare className="w-3 h-3 text-purple-400 shrink-0 inline" />
+                                <span className="truncate">{inv.investigatorNotes}</span>
                               </span>
-                            );
-                          })()}
-                          {inv.investigatorNotes && (
-                            <span className="text-xs text-slate-400 font-mono truncate max-w-[150px] flex items-center space-x-1" title={inv.investigatorNotes}>
-                              <MessageSquare className="w-3 h-3 text-purple-400 shrink-0 inline" />
-                              <span className="truncate">{inv.investigatorNotes}</span>
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <div className="flex items-center justify-end space-x-2">
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-4 px-4 text-right">
+                          <div className="flex items-center justify-end space-x-2">
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedInspectInvoice(inv);
-                              setIsDrawerOpen(true);
-                            }}
-                            className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-500/40 text-xs sm:text-sm font-sans font-bold transition-all cursor-pointer shadow-md"
-                          >
-                            <Eye className="w-4 h-4" />
-                            <span>Inspect</span>
-                          </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedInspectInvoice(inv);
+                                setIsDrawerOpen(true);
+                              }}
+                              className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl bg-purple-500/20 hover:bg-purple-600 text-purple-200 hover:text-white border border-purple-500/40 text-xs sm:text-sm font-sans font-bold transition-all cursor-pointer shadow-md"
+                            >
+                              <Eye className="w-4 h-4" />
+                              <span>Inspect</span>
+                            </button>
 
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteInvoice(inv._uuid || inv.id);
-                            }}
-                            className="p-1.5 rounded-xl bg-red-950/60 hover:bg-red-600 text-red-300 hover:text-white border border-red-800/60 transition-all cursor-pointer shadow-md"
-                            title="Delete Invoice"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteInvoice(inv._uuid || inv.id);
+                              }}
+                              className="p-1.5 rounded-xl bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 transition-all cursor-pointer shadow-md"
+                              title="Delete Invoice"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
