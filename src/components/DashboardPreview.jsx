@@ -8,7 +8,8 @@ import {
   ShieldCheck, AlertOctagon, IndianRupee, Search, Eye, CheckCircle,
   Upload, Download, SearchCode, Building2, Ban, FileText, ExternalLink,
   Sparkles, CheckCircle2, RefreshCw, Layers, Shield, FileCheck,
-  Filter, Calendar, MapPin, SlidersHorizontal, RotateCcw, X, ChevronDown, ChevronUp, Tag, ArrowUpDown, Trash2
+  Filter, Calendar, MapPin, SlidersHorizontal, RotateCcw, X, ChevronDown, ChevronUp, Tag, ArrowUpDown, Trash2,
+  ClipboardCheck, Clock, MessageSquare, Check
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import UploadModal from './UploadModal';
@@ -44,8 +45,32 @@ export default function DashboardPreview({ onSelectInvoice }) {
   const [filterState, setFilterState] = useState('All');
   const [filterRiskLevel, setFilterRiskLevel] = useState('All'); // 'All', 'Low', 'Medium', 'High'
   const [filterStatus, setFilterStatus] = useState('All'); // 'All', 'Safe', 'Review', 'Blocked'
+  const [filterInvestigationStatus, setFilterInvestigationStatus] = useState('All'); // 'All', 'Needs Review', 'Verified', 'Suspected'
   const [sortBy, setSortBy] = useState('date-desc');
   const [isFilterOpen, setIsFilterOpen] = useState(true);
+
+  const getInvestigationBadge = (investigationStatus) => {
+    const status = investigationStatus || 'Needs Review';
+    if (status === 'Verified') {
+      return {
+        style: 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40',
+        label: 'Verified',
+        icon: CheckCircle2
+      };
+    }
+    if (status === 'Suspected') {
+      return {
+        style: 'bg-rose-500/15 text-rose-400 border-rose-500/40',
+        label: 'Suspected',
+        icon: AlertOctagon
+      };
+    }
+    return {
+      style: 'bg-amber-500/15 text-amber-400 border-amber-500/40',
+      label: 'Needs Review',
+      icon: Clock
+    };
+  };
 
   const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [selectedInspectInvoice, setSelectedInspectInvoice] = useState(null);
@@ -324,6 +349,12 @@ export default function DashboardPreview({ onSelectInvoice }) {
       return false;
     }
 
+    // 7. Investigation Status Filter
+    const invStatus = item.investigationStatus || 'Needs Review';
+    if (filterInvestigationStatus !== 'All' && invStatus !== filterInvestigationStatus) {
+      return false;
+    }
+
     return true;
   }).sort((a, b) => {
     if (sortBy === 'date-desc') return new Date(b.date || 0) - new Date(a.date || 0);
@@ -346,7 +377,8 @@ export default function DashboardPreview({ onSelectInvoice }) {
     maxAmount !== '' ||
     filterState !== 'All' ||
     filterRiskLevel !== 'All' ||
-    filterStatus !== 'All';
+    filterStatus !== 'All' ||
+    filterInvestigationStatus !== 'All';
 
   const resetAllFilters = () => {
     setSearchTerm('');
@@ -820,26 +852,31 @@ export default function DashboardPreview({ onSelectInvoice }) {
                     </select>
                   </div>
 
-                  {/* 6. GST Status Filter */}
-                  <div className="space-y-1.5">
+                  {/* 7. Investigation Status Filter */}
+                  <div className="space-y-1.5 sm:col-span-2 lg:col-span-3 xl:col-span-2">
                     <label className="text-[11px] font-mono text-purple-300 font-bold uppercase tracking-wider flex items-center space-x-1">
-                      <ShieldCheck className="w-3 h-3 text-purple-400" />
-                      <span>GST Status</span>
+                      <ClipboardCheck className="w-3 h-3 text-purple-400" />
+                      <span>Investigation Audit</span>
                     </label>
                     <div className="flex items-center space-x-1 bg-[#090611] p-1 rounded-xl border border-purple-900/50">
-                      {['All', 'Safe', 'Review', 'Blocked'].map((status) => (
+                      {[
+                        { id: 'All', label: 'All' },
+                        { id: 'Needs Review', label: 'Needs Review' },
+                        { id: 'Verified', label: 'Verified' },
+                        { id: 'Suspected', label: 'Suspected' }
+                      ].map((opt) => (
                         <button
-                          key={status}
-                          onClick={() => setFilterStatus(status)}
-                          className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${filterStatus === status
-                              ? status === 'Safe' ? 'bg-emerald-500 text-slate-950 font-bold'
-                                : status === 'Review' ? 'bg-amber-500 text-slate-950 font-bold'
-                                  : status === 'Blocked' ? 'bg-red-500 text-white font-bold'
+                          key={opt.id}
+                          onClick={() => setFilterInvestigationStatus(opt.id)}
+                          className={`flex-1 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${filterInvestigationStatus === opt.id
+                              ? opt.id === 'Verified' ? 'bg-emerald-500 text-slate-950 font-bold'
+                                : opt.id === 'Suspected' ? 'bg-rose-500 text-white font-bold'
+                                  : opt.id === 'Needs Review' ? 'bg-amber-500 text-slate-950 font-bold'
                                     : 'bg-purple-600 text-white font-bold'
                               : 'text-slate-400 hover:text-white'
                             }`}
                         >
-                          {status}
+                          {opt.label}
                         </button>
                       ))}
                     </div>
@@ -943,6 +980,7 @@ export default function DashboardPreview({ onSelectInvoice }) {
                     <th className="py-4 px-4 text-right font-extrabold text-white">Amount</th>
                     <th className="py-4 px-4 text-center font-extrabold text-white">Risk Score</th>
                     <th className="py-4 px-4 text-center font-extrabold text-white">GST Status</th>
+                    <th className="py-4 px-4 text-center font-extrabold text-white">Investigation Status</th>
                     <th className="py-4 px-4 text-right font-extrabold text-white">Actions</th>
                   </tr>
                 </thead>
@@ -988,6 +1026,26 @@ export default function DashboardPreview({ onSelectInvoice }) {
                         <span className={`inline-block px-3.5 py-1 rounded-full border text-xs sm:text-sm font-bold ${getStatusBadge(inv.status)}`}>
                           {inv.status}
                         </span>
+                      </td>
+                      <td className="py-4 px-4 text-center font-sans">
+                        <div className="flex flex-col items-center space-y-1">
+                          {(() => {
+                            const invBadge = getInvestigationBadge(inv.investigationStatus);
+                            const InvIcon = invBadge.icon;
+                            return (
+                              <span className={`inline-flex items-center space-x-1.5 px-3 py-1 rounded-full border text-xs font-bold ${invBadge.style}`}>
+                                <InvIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>{invBadge.label}</span>
+                              </span>
+                            );
+                          })()}
+                          {inv.investigatorNotes && (
+                            <span className="text-[10px] text-slate-400 font-mono truncate max-w-[130px] flex items-center space-x-1" title={inv.investigatorNotes}>
+                              <MessageSquare className="w-3 h-3 text-purple-400 shrink-0 inline" />
+                              <span className="truncate">{inv.investigatorNotes}</span>
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-4 px-4 text-right">
                         <div className="flex items-center justify-end space-x-2">
@@ -1061,6 +1119,12 @@ export default function DashboardPreview({ onSelectInvoice }) {
         invoice={selectedInspectInvoice}
         onClose={() => setIsDrawerOpen(false)}
         onUpdateStatus={handleUpdateStatus}
+        onDeleteInvoice={handleDeleteInvoice}
+        onUpdateInvestigationStatus={(updatedInv) => {
+          setInvoices(prev => prev.map(inv => (inv.id === updatedInv.id || inv._uuid === updatedInv._uuid) ? updatedInv : inv));
+          setSelectedInspectInvoice(updatedInv);
+          fetchRealData();
+        }}
       />
     </section>
   );

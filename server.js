@@ -77,7 +77,36 @@ const REAL_GSTIN_REGISTRY = {
 };
 
 // Database of Invoices
-let mockInvoices = [];
+// Database of Invoices (Includes sample pre-reviewed audit case)
+let mockInvoices = [
+  {
+    _uuid: "INV-AUDIT-2026-001",
+    id: "DEL4-204570",
+    vendor: "VRP TELEMATICS PRIVATE LIMITED",
+    gstin: "06AAACV1234F1Z9",
+    ifsc: "HDFC0001234",
+    state: "Haryana",
+    amount: 77085,
+    amountFormatted: "₹77,085",
+    riskScore: 65,
+    status: "Review",
+    date: "09-11-2025",
+    month: "Nov",
+    investigationStatus: "Verified",
+    investigatorNotes: "Audited GST portal matching vendor filing history & verified bank account holder name.",
+    investigatedAt: "2026-08-08 09:30 AM",
+    investigatedBy: "Senior Compliance Auditor",
+    flaggedReasons: ["High Transaction Volume: Billing pattern audit flag"],
+    supplier: { legalName: "VRP TELEMATICS PRIVATE LIMITED", gstin: "06AAACV1234F1Z9", address: "Plot 42, Sector 18, Gurgaon, Haryana", state: "Haryana" },
+    customer: { name: "InvoiceShield Enterprise", address: "Cyber City, Gurgaon", gstin: "06AAAC123451Z2", placeOfSupply: "Haryana" },
+    invoiceDetails: { number: "DEL4-204570", date: "09.11.2025" },
+    lineItems: [{ serialNo: 1, name: "Telematics Tracking Equipment", qty: 15, rate: 5139, taxableValue: 77085, lineTotal: 77085 }],
+    financialSummary: { totalInvoiceAmount: 77085, amountInWords: "Seventy Seven Thousand Eighty Five only" },
+    bankingDetails: { bankName: "HDFC Bank", accountNumber: "998877665544", ifsc: "HDFC0001234" },
+    metadata: { copyStatus: "Original Copy", signatureStatus: "Signature Block Present", qrCodePresence: "QR Present", invoiceType: "Tax Invoice" },
+    anomalies: [{ anomaly_type: "Audit Verification Completed", severity: "Low", evidence: "Manually verified authentic by audit team", confidence: "HIGH" }]
+  }
+];
 
 // Universal GSTIN Verification Route (Protected)
 app.get('/api/verify-gstin/:gstin', authenticateToken, async (req, res) => {
@@ -675,6 +704,10 @@ function extractInvoiceStructured(extractedText, fileName) {
     status: status,
     date: invoiceDate,
     month: "Aug",
+    investigationStatus: "Needs Review",
+    investigatorNotes: "",
+    investigatedAt: null,
+    investigatedBy: null,
     flaggedReasons: anomalies.map(a => `${a.anomaly_type}: ${a.evidence}`),
 
     // Structured data response
@@ -926,12 +959,31 @@ app.post('/api/import-batch', authenticateToken, (req, res) => {
 // Update Status API (Protected)
 app.post('/api/update-invoice-status', authenticateToken, (req, res) => {
   const { id, newStatus } = req.body;
-  const invoice = mockInvoices.find(inv => inv.id === id);
+  const invoice = mockInvoices.find(inv => inv.id === id || inv._uuid === id);
   if (invoice) {
     invoice.status = newStatus;
     return res.json({ message: `Invoice ${id} status updated to ${newStatus}`, invoice });
   }
   return res.status(404).json({ error: "Invoice not found" });
+});
+
+// Update Investigation Audit Status & Notes API (Protected)
+app.post('/api/update-investigation-status', authenticateToken, (req, res) => {
+  const { id, investigationStatus, investigatorNotes, reviewer } = req.body;
+  const invoice = mockInvoices.find(inv => inv.id === id || inv._uuid === id);
+  if (invoice) {
+    if (investigationStatus) invoice.investigationStatus = investigationStatus;
+    if (investigatorNotes !== undefined) invoice.investigatorNotes = investigatorNotes;
+    invoice.investigatedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+    invoice.investigatedBy = reviewer || req.user?.name || "Reviewer";
+
+    console.log(`[Investigation Review] Case ${id} updated -> Status: ${invoice.investigationStatus}, Notes: "${invoice.investigatorNotes}"`);
+    return res.json({
+      message: `Investigation audit status updated for case ${id}`,
+      invoice
+    });
+  }
+  return res.status(404).json({ error: "Security case (invoice) not found" });
 });
 
 // Clear Entire Database API (Protected)

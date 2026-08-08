@@ -1,10 +1,58 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, AlertTriangle, FileText, CheckCircle2, Ban, Download, Building2, Trash2 } from 'lucide-react';
+import { X, AlertTriangle, FileText, CheckCircle2, Ban, Download, Building2, Trash2, ClipboardCheck, Clock, ShieldCheck, Tag, Check, AlertOctagon } from 'lucide-react';
 import jsPDF from 'jspdf';
 
-export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUpdateStatus, onDeleteInvoice }) {
+export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUpdateStatus, onDeleteInvoice, onUpdateInvestigationStatus }) {
   if (!isOpen || !invoice) return null;
+
+  const [investigationStatus, setInvestigationStatus] = useState(invoice.investigationStatus || 'Needs Review');
+  const [investigatorNotes, setInvestigatorNotes] = useState(invoice.investigatorNotes || '');
+  const [isSavingReview, setIsSavingReview] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    if (invoice) {
+      setInvestigationStatus(invoice.investigationStatus || 'Needs Review');
+      setInvestigatorNotes(invoice.investigatorNotes || '');
+      setSaveSuccess(false);
+    }
+  }, [invoice]);
+
+  const handleSaveInvestigation = async () => {
+    setIsSavingReview(true);
+    setSaveSuccess(false);
+
+    try {
+      const token = localStorage.getItem('invoiceshield_token');
+      const response = await fetch('/api/update-investigation-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          id: invoice.id || invoice._uuid,
+          investigationStatus: investigationStatus,
+          investigatorNotes: investigatorNotes
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to save audit review');
+
+      const data = await response.json();
+      setIsSavingReview(false);
+      setSaveSuccess(true);
+      if (onUpdateInvestigationStatus) {
+        onUpdateInvestigationStatus(data.invoice);
+      }
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      setIsSavingReview(false);
+      console.error(err);
+      alert('Error saving investigation review: ' + err.message);
+    }
+  };
 
   const handleDownloadReport = () => {
     const doc = new jsPDF();
@@ -259,6 +307,93 @@ export default function InvoiceInspectionDrawer({ invoice, isOpen, onClose, onUp
                   </div>
                 </div>
 
+              </div>
+
+              {/* Investigator Audit & Case Review Section */}
+              <div className="p-5 rounded-2xl bg-[#0e081c] border border-purple-500/40 space-y-4 shadow-xl font-mono">
+                <div className="flex items-center justify-between border-b border-purple-900/40 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <ClipboardCheck className="w-5 h-5 text-purple-400" />
+                    <h4 className="text-sm font-bold text-white uppercase tracking-wider">
+                      Investigator Case Review
+                    </h4>
+                  </div>
+                  <span className={`px-2.5 py-0.5 rounded-full border text-xs font-bold ${
+                    investigationStatus === 'Verified'
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      : investigationStatus === 'Suspected'
+                      ? 'bg-rose-500/15 border-rose-500/40 text-rose-400'
+                      : 'bg-amber-500/15 border-amber-500/40 text-amber-400'
+                  }`}>
+                    {investigationStatus}
+                  </span>
+                </div>
+
+                {/* Status Selection Buttons */}
+                <div>
+                  <label className="block text-[11px] text-slate-400 uppercase tracking-wider mb-2 font-bold">
+                    Set Investigation Label:
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { id: 'Needs Review', label: 'Needs Review' },
+                      { id: 'Verified', label: 'Verified Authentic' },
+                      { id: 'Suspected', label: 'Suspected Threat' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.id}
+                        type="button"
+                        onClick={() => setInvestigationStatus(opt.id)}
+                        className={`py-2 px-2.5 rounded-xl border text-[11px] font-bold transition-all cursor-pointer flex items-center justify-center space-x-1 ${
+                          investigationStatus === opt.id
+                            ? opt.id === 'Verified'
+                              ? 'bg-emerald-500/25 border-emerald-500 text-emerald-300 shadow-md shadow-emerald-950/50'
+                              : opt.id === 'Suspected'
+                              ? 'bg-rose-500/25 border-rose-500 text-rose-300 shadow-md shadow-rose-950/50'
+                              : 'bg-amber-500/25 border-amber-500 text-amber-300 shadow-md shadow-amber-950/50'
+                            : 'bg-[#05030a] border-purple-900/40 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {investigationStatus === opt.id && <Check className="w-3.5 h-3.5 shrink-0" />}
+                        <span>{opt.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Investigator Note Textarea */}
+                <div>
+                  <label className="block text-[11px] text-slate-400 uppercase tracking-wider mb-1.5 font-bold">
+                    Investigator Audit Note:
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={investigatorNotes}
+                    onChange={(e) => setInvestigatorNotes(e.target.value)}
+                    placeholder="Enter audit observations, GST matching notes, or evidence summary..."
+                    className="w-full p-3 rounded-xl bg-[#05030a] border border-purple-900/50 text-slate-200 text-xs focus:outline-none focus:border-purple-400 transition-colors"
+                  />
+                </div>
+
+                {/* Save Button & Audit Timestamp */}
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] text-slate-400">
+                    {invoice.investigatedBy ? `Audited by ${invoice.investigatedBy}` : 'Unreviewed case'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleSaveInvestigation}
+                    disabled={isSavingReview}
+                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-lg flex items-center space-x-1.5 ${
+                      saveSuccess
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:brightness-110 text-white'
+                    }`}
+                  >
+                    {saveSuccess ? <Check className="w-4 h-4" /> : <ShieldCheck className="w-4 h-4" />}
+                    <span>{isSavingReview ? 'Saving Audit...' : saveSuccess ? 'Audit Review Saved!' : 'Save Audit Review'}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Detected Anomalies / Reasons */}
