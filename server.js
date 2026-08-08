@@ -10,8 +10,13 @@ import {
   getFirestore, collection, doc, setDoc, getDocs, getDoc, updateDoc, deleteDoc, query, where
 } from 'firebase/firestore';
 
-const require = createRequire(import.meta.url);
-const pdfParseModule = require('pdf-parse');
+let pdfParseModule = null;
+try {
+  const require = createRequire(import.meta.url);
+  pdfParseModule = require('pdf-parse');
+} catch (pdfLoadErr) {
+  console.warn('[pdf-parse] Cold-start initialization notice:', pdfLoadErr.message);
+}
 
 dotenv.config();
 
@@ -1230,6 +1235,14 @@ app.delete('/api/delete-invoice/:id', authenticateToken, async (req, res) => {
     return res.json({ message: `Invoice ${targetId} deleted successfully` });
   }
   return res.status(404).json({ error: "Invoice not found" });
+});
+
+// Global Express Serverless Error Handler (Guarantees JSON error responses)
+app.use((err, req, res, next) => {
+  console.error('[Serverless Error Handler]:', err);
+  res.status(err.status || 500).json({
+    error: err.message || 'An internal server error occurred.'
+  });
 });
 
 if (!process.env.VERCEL) {
