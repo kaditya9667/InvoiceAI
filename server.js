@@ -321,11 +321,13 @@ app.get('/api/real-metrics', authenticateToken, async (req, res) => {
 async function saveUserToFirebase(user) {
   try {
     const userKey = String(user.email).toLowerCase().trim().replace(/[\/\.\#\$\[\]]/g, '_');
-    await fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`, {
+    const saveTask = fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(user)
     });
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RTDB Timeout")), 2000));
+    await Promise.race([saveTask, timeout]);
     console.log(`[Firebase RTDB] Saved user account ${user.email}`);
   } catch (err) {
     console.warn(`[Firebase RTDB] User save notice:`, err.message);
@@ -339,7 +341,10 @@ async function findUserByEmail(email) {
 
   try {
     const userKey = cleanEmail.replace(/[\/\.\#\$\[\]]/g, '_');
-    const res = await fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`);
+    const fetchTask = fetch(`${FIREBASE_RTDB_URL}/users/${userKey}.json`);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("RTDB Timeout")), 2000));
+    const res = await Promise.race([fetchTask, timeout]);
+
     if (res.ok) {
       const remoteUser = await res.json();
       if (remoteUser && remoteUser.email) {

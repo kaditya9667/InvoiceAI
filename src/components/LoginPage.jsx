@@ -31,11 +31,12 @@ export default function LoginPage({ onLoginSuccess, onBackToLanding }) {
       if (contentType.includes('application/json')) {
         data = await response.json();
       } else {
-        throw new Error('Authentication service unavailable. Please check your network or try again.');
+        const text = await response.text().catch(() => '');
+        console.warn('[Auth Raw Response]:', text);
       }
 
       if (!response.ok) {
-        throw new Error(data.error || (isSignUp ? 'Registration failed' : 'Sign in failed'));
+        throw new Error(data.error || (isSignUp ? 'Registration failed. Please try again.' : 'Invalid email or password.'));
       }
 
       localStorage.setItem('invoiceshield_token', data.token);
