@@ -200,6 +200,11 @@ async function saveInvoiceToFirebase(invoice) {
     });
     if (res.ok) {
       console.log(`[Firebase RTDB] Successfully saved invoice ${docId} to Realtime Database.`);
+    } else {
+      const errBody = await res.json().catch(() => ({}));
+      if (errBody.error === 'Permission denied') {
+        console.warn(`[Firebase RTDB Warning] Permission denied! In Firebase Console, click 'Rules' tab and set .read: true, .write: true then Publish.`);
+      }
     }
   } catch (err) {
     console.warn(`[Firebase RTDB] Cloud save notice for ${invoice?.id}:`, err.message);
