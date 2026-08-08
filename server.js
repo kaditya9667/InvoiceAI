@@ -163,14 +163,22 @@ app.get('/api/verify-gstin/:gstin', authenticateToken, async (req, res) => {
   });
 });
 
+// Helper to retrieve invoices accessible to the authenticated user
+function getUserInvoices(userEmail) {
+  if (!userEmail) return mockInvoices;
+  const cleanEmail = String(userEmail).toLowerCase().trim();
+  return mockInvoices.filter(inv => !inv.ownerEmail || inv.ownerEmail === cleanEmail);
+}
+
 // Dynamically Calculate REAL Dashboard Metrics Endpoint (Protected)
 app.get('/api/real-metrics', authenticateToken, (req, res) => {
-  const totalInvoices = mockInvoices.length;
-  const safeCount = mockInvoices.filter(i => i.status === 'Safe').length;
-  const reviewCount = mockInvoices.filter(i => i.status === 'Review').length;
-  const blockedCount = mockInvoices.filter(i => i.status === 'Blocked').length;
+  const userInvoices = getUserInvoices(req.user?.email);
+  const totalInvoices = userInvoices.length;
+  const safeCount = userInvoices.filter(i => i.status === 'Safe').length;
+  const reviewCount = userInvoices.filter(i => i.status === 'Review').length;
+  const blockedCount = userInvoices.filter(i => i.status === 'Blocked').length;
 
-  const totalLossPreventedRaw = mockInvoices
+  const totalLossPreventedRaw = userInvoices
     .filter(i => i.status === 'Blocked' || i.status === 'Review')
     .reduce((sum, item) => sum + item.amount, 0);
 
@@ -186,14 +194,14 @@ app.get('/api/real-metrics', authenticateToken, (req, res) => {
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug"];
   const trendData = months.map(m => {
-    const monthInvoices = mockInvoices.filter(i => i.month === m);
+    const monthInvoices = userInvoices.filter(i => i.month === m);
     const safe = monthInvoices.filter(i => i.status === 'Safe').length;
     const blocked = monthInvoices.filter(i => i.status === 'Blocked' || i.status === 'Review').length;
     return { month: m, safe: safe, blocked: blocked };
   });
 
   return res.json({
-    invoices: mockInvoices,
+    invoices: userInvoices,
     stats: {
       totalInvoices,
       safeCount,
@@ -840,6 +848,7 @@ app.post('/api/analyze-invoice-pdf', authenticateToken, upload.single('file'), a
 
     // Always use structured regex extractor
     const parsedInvoice = extractInvoiceStructured(extractedText, fileName);
+    parsedInvoice.ownerEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
 
     mockInvoices.unshift(parsedInvoice);
 
@@ -864,11 +873,13 @@ app.post('/api/import-batch', authenticateToken, (req, res) => {
     }
 
     const importedCount = invoices.length;
+    const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
     for (const inv of invoices) {
       const amountVal = parseFloat(inv.amount) || 0;
       const formattedAmount = inv.amountFormatted || `₹${amountVal.toLocaleString('en-IN')}`;
 
       const parsedInvoice = {
+        ownerEmail: userEmail,
         id: inv.id || `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         vendor: inv.vendor || "Unknown Vendor",
         gstin: inv.gstin || "Not present",
@@ -959,7 +970,8 @@ app.post('/api/import-batch', authenticateToken, (req, res) => {
 // Update Status API (Protected)
 app.post('/api/update-invoice-status', authenticateToken, (req, res) => {
   const { id, newStatus } = req.body;
-  const invoice = mockInvoices.find(inv => inv.id === id || inv._uuid === id);
+  const userInvoices = getUserInvoices(req.user?.email);
+  const invoice = userInvoices.find(inv => inv.id === id || inv._uuid === id);
   if (invoice) {
     invoice.status = newStatus;
     return res.json({ message: `Invoice ${id} status updated to ${newStatus}`, invoice });
@@ -970,12 +982,13 @@ app.post('/api/update-invoice-status', authenticateToken, (req, res) => {
 // Update Investigation Audit Status & Notes API (Protected)
 app.post('/api/update-investigation-status', authenticateToken, (req, res) => {
   const { id, investigationStatus, investigatorNotes, reviewer } = req.body;
-  const invoice = mockInvoices.find(inv => inv.id === id || inv._uuid === id);
+  const userInvoices = getUserInvoices(req.user?.email);
+  const invoice = userInvoices.find(inv => inv.id === id || inv._uuid === id);
   if (invoice) {
     if (investigationStatus) invoice.investigationStatus = investigationStatus;
     if (investigatorNotes !== undefined) invoice.investigatorNotes = investigatorNotes;
     invoice.investigatedAt = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-    invoice.investigatedBy = reviewer || req.user?.name || "Reviewer";
+    invoice.investigatedBy = reviewer || req.user?.name || req.user?.email || "Reviewer";
 
     console.log(`[Investigation Review] Case ${id} updated -> Status: ${invoice.investigationStatus}, Notes: "${invoice.investigatorNotes}"`);
     return res.json({
@@ -988,10 +1001,12 @@ app.post('/api/update-investigation-status', authenticateToken, (req, res) => {
 
 // Clear Entire Database API (Protected)
 app.post('/api/clear-all-invoices', authenticateToken, (req, res) => {
-  const count = mockInvoices.length;
-  mockInvoices = [];
-  console.log(`[clear-all] Cleared all ${count} invoices from database.`);
-  return res.json({ message: `Database wiped clean. Removed ${count} invoice(s).` });
+  const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
+  const initialCount = mockInvoices.length;
+  mockInvoices = mockInvoices.filter(inv => inv.ownerEmail && inv.ownerEmail !== userEmail);
+  const deletedCount = initialCount - mockInvoices.length;
+  console.log(`[clear-all] Cleared ${deletedCount} invoices for user ${userEmail}.`);
+  return res.json({ message: `User database cleared. Removed ${deletedCount} invoice(s).` });
 });
 
 // Bulk Delete Invoices API (Protected)
@@ -1001,9 +1016,16 @@ app.post('/api/delete-invoices-bulk', authenticateToken, (req, res) => {
     return res.status(400).json({ error: "IDs array is required for bulk delete." });
   }
 
+  const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
   const initialCount = mockInvoices.length;
   const idsSet = new Set(ids.map(id => String(id).trim()));
-  mockInvoices = mockInvoices.filter(inv => !idsSet.has(String(inv.id).trim()) && !idsSet.has(String(inv._uuid).trim()));
+  mockInvoices = mockInvoices.filter(inv => {
+    const isTarget = idsSet.has(String(inv.id).trim()) || idsSet.has(String(inv._uuid).trim());
+    if (isTarget) {
+      return inv.ownerEmail && inv.ownerEmail !== userEmail;
+    }
+    return true;
+  });
   const deletedCount = initialCount - mockInvoices.length;
 
   console.log(`[bulk-delete] Deleted ${deletedCount} invoices.`);
@@ -1013,8 +1035,15 @@ app.post('/api/delete-invoices-bulk', authenticateToken, (req, res) => {
 // Delete Invoice API (Protected)
 app.delete('/api/delete-invoice/:id', authenticateToken, (req, res) => {
   const targetId = String(req.params.id).trim();
+  const userEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
   const initialCount = mockInvoices.length;
-  mockInvoices = mockInvoices.filter(inv => String(inv.id).trim() !== targetId && String(inv._uuid).trim() !== targetId);
+  mockInvoices = mockInvoices.filter(inv => {
+    const isMatch = String(inv.id).trim() === targetId || String(inv._uuid).trim() === targetId;
+    if (isMatch) {
+      return inv.ownerEmail && inv.ownerEmail !== userEmail;
+    }
+    return true;
+  });
   if (mockInvoices.length < initialCount) {
     console.log(`[delete] Invoice ${targetId} deleted from database.`);
     return res.json({ message: `Invoice ${targetId} deleted successfully` });
