@@ -187,17 +187,17 @@ app.get('/api/verify-gstin/:gstin', authenticateToken, async (req, res) => {
   });
 });
 
-// Firestore Cloud Sync Helpers
-async function saveInvoiceToFirestore(invoice) {
+// Firestore Cloud Sync Helpers (Non-blocking with 1.5s max timeout fallback)
+function saveInvoiceToFirestore(invoice) {
   if (!db) return;
-  try {
-    const docId = String(invoice._uuid || invoice.id).trim();
-    const invoiceDoc = doc(db, 'invoices', docId);
-    await setDoc(invoiceDoc, JSON.parse(JSON.stringify(invoice)), { merge: true });
-    console.log(`[Firebase Firestore] Persisted invoice ${docId} to cloud.`);
-  } catch (err) {
-    console.warn(`[Firebase Firestore] Save failed for ${invoice?.id}:`, err.message);
-  }
+  const docId = String(invoice._uuid || invoice.id).trim();
+  const invoiceDoc = doc(db, 'invoices', docId);
+  const saveTask = setDoc(invoiceDoc, JSON.parse(JSON.stringify(invoice)), { merge: true });
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Cloud Timeout")), 1500));
+
+  Promise.race([saveTask, timeout])
+    .then(() => console.log(`[Firebase Firestore] Persisted invoice ${docId} to cloud.`))
+    .catch(err => console.warn(`[Firebase Firestore] Cloud save notice for ${invoice?.id}:`, err.message));
 }
 
 async function fetchUserInvoicesFromFirestore(userEmail) {
@@ -218,7 +218,10 @@ async function fetchUserInvoicesFromFirestore(userEmail) {
     } else {
       q = query(invoicesCol);
     }
-    const snapshot = await getDocs(q);
+    const readTask = getDocs(q);
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Read Timeout")), 1500));
+
+    const snapshot = await Promise.race([readTask, timeout]);
     const firestoreDocs = snapshot.docs.map(d => d.data());
 
     // Merge memory items into Firestore results avoiding duplicates
@@ -236,26 +239,26 @@ async function fetchUserInvoicesFromFirestore(userEmail) {
   }
 }
 
-async function updateInvoiceInFirestore(docId, updates) {
+function updateInvoiceInFirestore(docId, updates) {
   if (!db) return;
-  try {
-    const targetDoc = doc(db, 'invoices', String(docId).trim());
-    await updateDoc(targetDoc, updates);
-    console.log(`[Firebase Firestore] Updated document ${docId} in cloud.`);
-  } catch (err) {
-    console.warn(`[Firebase Firestore] Update failed for ${docId}:`, err.message);
-  }
+  const targetDoc = doc(db, 'invoices', String(docId).trim());
+  const updateTask = updateDoc(targetDoc, updates);
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Update Timeout")), 1500));
+
+  Promise.race([updateTask, timeout])
+    .then(() => console.log(`[Firebase Firestore] Updated document ${docId} in cloud.`))
+    .catch(err => console.warn(`[Firebase Firestore] Update notice for ${docId}:`, err.message));
 }
 
-async function deleteInvoiceFromFirestore(docId) {
+function deleteInvoiceFromFirestore(docId) {
   if (!db) return;
-  try {
-    const targetDoc = doc(db, 'invoices', String(docId).trim());
-    await deleteDoc(targetDoc);
-    console.log(`[Firebase Firestore] Deleted document ${docId} from cloud.`);
-  } catch (err) {
-    console.warn(`[Firebase Firestore] Delete failed for ${docId}:`, err.message);
-  }
+  const targetDoc = doc(db, 'invoices', String(docId).trim());
+  const deleteTask = deleteDoc(targetDoc);
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error("Firestore Delete Timeout")), 1500));
+
+  Promise.race([deleteTask, timeout])
+    .then(() => console.log(`[Firebase Firestore] Deleted document ${docId} from cloud.`))
+    .catch(err => console.warn(`[Firebase Firestore] Delete notice for ${docId}:`, err.message));
 }
 
 // Dynamically Calculate REAL Dashboard Metrics Endpoint (Protected)
@@ -939,7 +942,7 @@ app.post('/api/analyze-invoice-pdf', authenticateToken, upload.single('file'), a
     parsedInvoice.ownerEmail = req.user?.email ? String(req.user.email).toLowerCase().trim() : null;
 
     mockInvoices.unshift(parsedInvoice);
-    await saveInvoiceToFirestore(parsedInvoice);
+    saveInvoiceToFirestore(parsedInvoice);
 
     return res.json({
       message: `Invoice scanned and processed successfully`,
